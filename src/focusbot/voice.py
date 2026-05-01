@@ -20,17 +20,16 @@ import pyttsx3
 
 from focusbot.config import VOICE_ENABLED
 
-# ── edge-tts Configuration ─────────────────────────────────────────────────
+# edge-tts Configuration 
 # GuyNeural — clean, natural, male American voice (closest to Siri)
-EDGE_VOICE     = "en-US-GuyNeural"
+EDGE_VOICE     = "en-GB-RyanNeural"
 
-# ── Fallback Configuration ─────────────────────────────────────────────────
+# Fallback Configuration 
 FALLBACK_VOICE = "com.apple.speech.synthesis.voice.Alex"
 FALLBACK_RATE  = 185
 
 
-# ── pyttsx3 Fallback Engine ────────────────────────────────────────────────
-
+# pyttsx3 Fallback Engine 
 def init_tts() -> pyttsx3.Engine | None:
     """
     Initialize the pyttsx3 fallback TTS engine.
@@ -139,4 +138,3 @@ def speak(text: str, engine: pyttsx3.Engine | None) -> None:
             _speak_fallback(clean_text, engine)
 
     threading.Thread(target=_run, daemon=True).start()
-    
