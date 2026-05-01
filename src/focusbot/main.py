@@ -1,7 +1,7 @@
 """
 main.py
--------
-Entry point for FocusBot.
+
+Entry point for alfred.ai.
 
 Run this file to launch the application:
     python -m focusbot
@@ -15,7 +15,7 @@ from focusbot.gui import FocusBotApp
 
 
 def main() -> None:
-    """Create the tkinter root window and launch FocusBotApp."""
+    """Create the tkinter root window and launch alfred.ai."""
     root = tk.Tk()
     FocusBotApp(root)
     root.mainloop()
@@ -23,3 +23,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+    

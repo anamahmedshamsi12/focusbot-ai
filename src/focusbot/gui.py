@@ -1,11 +1,12 @@
 """
 gui.py
-------
-Tkinter GUI for FocusBot.
+
+Tkinter GUI for alfred.ai.
 
 FocusBotApp is the main application window. It wires together the
-assistant, reminders, and voice modules into a single chat interface
-with a mode toggle, quick-action buttons, and a live status bar.
+assistant, reminders, voice, and listener modules into a single chat
+interface with a mode toggle, quick-action buttons, mic input, and
+a live status bar.
 """
 
 import threading
@@ -17,10 +18,11 @@ import pyttsx3
 from focusbot.assistant import (
     FOCUS_MODE_PROMPT,
     GENERAL_PROMPT,
-    ask_focusbot,
+    ask_alfred,
     create_client,
 )
 from focusbot.config import FOCUS_MINUTES
+from focusbot.listener import init_listener, start_listening
 from focusbot.reminders import (
     detect_intent,
     parse_reminder,
@@ -32,7 +34,7 @@ from focusbot.voice import init_tts, speak
 
 class FocusBotApp:
     """
-    Main application window for FocusBot.
+    Main application window for alfred.ai.
 
     Responsibilities:
     - Build and manage all tkinter widgets
@@ -43,25 +45,26 @@ class FocusBotApp:
 
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
-        self.root.title("🤖 FocusBot — AI Assistant")
+        self.root.title("alfred.ai")
         self.root.geometry("600x700")
         self.root.configure(bg="#1a1a2e")
         self.root.resizable(True, True)
 
-        # ── State ──────────────────────────────────────────────────────────
+        # State
         self.conversation_history: list[dict] = []
         self.focus_active: bool = False
-        self.focus_mode: bool = False          # False = General, True = ADHD Focus
+        self.focus_mode: bool   = False
+        self.is_listening: bool = False
 
-        # ── External dependencies ──────────────────────────────────────────
+        # External dependencies
         self.tts_engine: pyttsx3.Engine | None = init_tts()
+        self.recognizer = init_listener()
         self.client = create_client()
 
-        # ── Build UI and greet the user ────────────────────────────────────
         self._build_ui()
         self._welcome()
 
-    # ── UI Construction ────────────────────────────────────────────────────
+    # UI Construction
 
     def _build_ui(self) -> None:
         """Construct all tkinter widgets and lay them out."""
@@ -76,8 +79,8 @@ class FocusBotApp:
         frame.pack(fill="x")
 
         tk.Label(
-            frame, text="🤖  FocusBot",
-            font=("Helvetica", 20, "bold"),
+            frame, text="alfred.ai",
+            font=("Helvetica", 22, "bold"),
             bg="#16213e", fg="#00d4ff",
         ).pack(side="left", padx=20)
 
@@ -87,10 +90,9 @@ class FocusBotApp:
             bg="#16213e", fg="#888888",
         ).pack(side="left")
 
-        # Mode toggle — top right corner
         self.mode_btn = tk.Button(
             frame,
-            text="🧠 Focus Mode: OFF",
+            text="Focus Mode: OFF",
             command=self._toggle_mode,
             bg="#0f3460", fg="#888888",
             font=("Helvetica", 10),
@@ -103,10 +105,10 @@ class FocusBotApp:
         frame.pack(fill="x", padx=15)
 
         buttons = [
-            ("🎯 Focus 25min", self._quick_focus),
-            ("📋 Breakdown",   self._quick_breakdown),
-            ("☀️ Routine",     self._quick_routine),
-            ("⏹ Stop Timer",   self._stop_focus),
+            ("Focus 25min", self._quick_focus),
+            ("Breakdown",   self._quick_breakdown),
+            ("Routine",     self._quick_routine),
+            ("Stop Timer",  self._stop_focus),
         ]
         for label, cmd in buttons:
             tk.Button(
@@ -131,7 +133,6 @@ class FocusBotApp:
         )
         self.chat_display.pack(fill="both", expand=True)
 
-        # Colour tags for different message types
         self.chat_display.tag_configure("bot_name",  foreground="#00d4ff", font=("Helvetica", 12, "bold"))
         self.chat_display.tag_configure("bot_text",  foreground="#e0e0e0", font=("Helvetica", 12))
         self.chat_display.tag_configure("user_name", foreground="#ff6b9d", font=("Helvetica", 12, "bold"))
@@ -141,6 +142,16 @@ class FocusBotApp:
     def _build_input_area(self) -> None:
         frame = tk.Frame(self.root, bg="#16213e", pady=10)
         frame.pack(fill="x", padx=15, pady=(0, 5))
+
+        self.mic_btn = tk.Button(
+            frame, text="🎙",
+            command=self._on_mic,
+            bg="#0f3460", fg="white",
+            font=("Helvetica", 14),
+            relief="flat", padx=10, pady=6, cursor="hand2",
+            activebackground="#e94560", activeforeground="white",
+        )
+        self.mic_btn.pack(side="left", padx=(0, 8))
 
         self.input_field = tk.Entry(
             frame,
@@ -153,7 +164,7 @@ class FocusBotApp:
         self.input_field.focus()
 
         tk.Button(
-            frame, text="Send ➤",
+            frame, text="Send",
             command=self._on_send,
             bg="#e94560", fg="white",
             font=("Helvetica", 12, "bold"),
@@ -170,22 +181,21 @@ class FocusBotApp:
             anchor="w", padx=10,
         ).pack(fill="x")
 
-    # ── Thread-safe UI Callbacks ───────────────────────────────────────────
+    # Thread-safe UI Callbacks
 
     def display_message(self, sender: str, message: str) -> None:
         """
         Append a message to the chat display.
-        Safe to call from any thread — uses root.after() to schedule
-        the update on the main tkinter thread.
+        Safe to call from any thread.
 
         Args:
-            sender:  'FocusBot', 'You', or anything else (shown as system text).
+            sender: 'Alfred', 'You', or anything else shown as system text.
             message: The message body to display.
         """
         def _update() -> None:
             self.chat_display.configure(state="normal")
-            if sender == "FocusBot":
-                self.chat_display.insert("end", "\nFocusBot  ", "bot_name")
+            if sender == "Alfred":
+                self.chat_display.insert("end", "\nAlfred  ", "bot_name")
                 self.chat_display.insert("end", f"\n{message}\n", "bot_text")
             elif sender == "You":
                 self.chat_display.insert("end", "\nYou  ", "user_name")
@@ -207,7 +217,43 @@ class FocusBotApp:
         """
         self.root.after(0, lambda: self.status_var.set(text))
 
-    # ── Message Routing ────────────────────────────────────────────────────
+    # Voice Input
+
+    def _on_mic(self) -> None:
+        """Called when the mic button is clicked. Starts listening."""
+        if self.is_listening:
+            return
+
+        start_listening(
+            recognizer=self.recognizer,
+            on_listening=self._on_listening,
+            on_result=self._on_voice_result,
+            on_done=self._on_listening_done,
+        )
+
+    def _on_listening(self) -> None:
+        """Called when the mic opens. Updates UI to show listening state."""
+        self.is_listening = True
+        self.root.after(0, lambda: self.mic_btn.config(bg="#e94560", text="🔴"))
+        self.update_status("Listening...")
+
+    def _on_listening_done(self) -> None:
+        """Called when listening finishes. Resets mic button."""
+        self.is_listening = False
+        self.root.after(0, lambda: self.mic_btn.config(bg="#0f3460", text="🎙"))
+        self.update_status("Ready")
+
+    def _on_voice_result(self, text: str) -> None:
+        """
+        Called when speech is successfully transcribed.
+
+        Args:
+            text: Transcribed speech string.
+        """
+        self.display_message("You", text)
+        threading.Thread(target=self._process_message, args=(text,), daemon=True).start()
+
+    # Message Routing
 
     def _on_send(self, event: tk.Event | None = None) -> None:
         """Called when the user presses Enter or clicks Send."""
@@ -226,64 +272,63 @@ class FocusBotApp:
         Args:
             text: The user's raw input string.
         """
-        self.update_status("FocusBot is thinking...")
+        self.update_status("Alfred is thinking...")
         intent = detect_intent(text)
 
         if intent == "stop":
             self.focus_active = False
-            self.display_message("FocusBot", "⏹ Focus session stopped. Good effort!")
+            self.display_message("Alfred", "Focus session stopped. Good effort!")
             speak("Focus session stopped. Good effort!", self.tts_engine)
             self.update_status("Ready")
 
         elif intent == "focus":
-            reply = ask_focusbot(text, self.conversation_history, self.client, self._active_prompt())
-            self.display_message("FocusBot", reply)
+            reply = ask_alfred(text, self.conversation_history, self.client, self._active_prompt())
+            self.display_message("Alfred", reply)
             speak(reply, self.tts_engine)
             start_focus_timer(FOCUS_MINUTES, self)
 
         elif intent == "reminder":
             minutes = parse_reminder(text)
-            reply = ask_focusbot(text, self.conversation_history, self.client, self._active_prompt())
-            self.display_message("FocusBot", reply)
+            reply = ask_alfred(text, self.conversation_history, self.client, self._active_prompt())
+            self.display_message("Alfred", reply)
             speak(reply, self.tts_engine)
             if minutes:
                 set_reminder(minutes, text, self)
-                self.display_message("System", f"⏰ Reminder set for {minutes} minutes from now.")
+                self.display_message("System", f"Reminder set for {minutes} minutes from now.")
             else:
-                self.display_message("System", "⚠️ Couldn't find a time. Try: 'Remind me in 20 minutes to...'")
+                self.display_message("System", "Could not find a time. Try: Remind me in 20 minutes to...")
             self.update_status("Ready")
 
         else:
-            # General chat, task breakdown, routine — all handled by Claude
-            reply = ask_focusbot(text, self.conversation_history, self.client, self._active_prompt())
-            self.display_message("FocusBot", reply)
+            reply = ask_alfred(text, self.conversation_history, self.client, self._active_prompt())
+            self.display_message("Alfred", reply)
             speak(reply, self.tts_engine)
             self.update_status("Ready")
 
-    # ── Mode Toggle ────────────────────────────────────────────────────────
+    # Mode Toggle
 
     def _toggle_mode(self) -> None:
         """
         Switch between General Mode and ADHD Focus Mode.
-        Clears conversation history on switch so the AI isn't confused.
+        Clears conversation history on switch so the AI stays in context.
         """
         self.focus_mode = not self.focus_mode
         self.conversation_history = []
 
         if self.focus_mode:
-            self.mode_btn.config(text="🧠 Focus Mode: ON", fg="#00d4ff")
-            self.display_message("System", "── Switched to ADHD Focus Mode. Conversation reset. ──")
-            self.display_message("FocusBot", "Focus Mode on 🤖 I'll keep things short and break tasks down. What are we working on?")
+            self.mode_btn.config(text="Focus Mode: ON", fg="#00d4ff")
+            self.display_message("System", "Switched to Focus Mode. Conversation reset.")
+            self.display_message("Alfred", "Focus Mode on. I will keep things short and break tasks down. What are we working on?")
         else:
-            self.mode_btn.config(text="🧠 Focus Mode: OFF", fg="#888888")
-            self.display_message("System", "── Switched to General Mode. Conversation reset. ──")
-            self.display_message("FocusBot", "General mode on 🤖 I can help with anything now — what's on your mind?")
+            self.mode_btn.config(text="Focus Mode: OFF", fg="#888888")
+            self.display_message("System", "Switched to General Mode. Conversation reset.")
+            self.display_message("Alfred", "General mode on. I can help with anything now. What is on your mind?")
 
     def _active_prompt(self) -> str:
         """Return the system prompt for whichever mode is currently active."""
         return FOCUS_MODE_PROMPT if self.focus_mode else GENERAL_PROMPT
 
-    # ── Quick Action Buttons ───────────────────────────────────────────────
+    # Quick Action Buttons
 
     def _quick_focus(self) -> None:
         self.input_field.delete(0, tk.END)
@@ -303,19 +348,20 @@ class FocusBotApp:
     def _stop_focus(self) -> None:
         self.focus_active = False
         self.update_status("Ready")
-        self.display_message("FocusBot", "⏹ Timer stopped. That's okay — every minute counts!")
+        self.display_message("Alfred", "Timer stopped. That is okay, every minute counts!")
 
-    # ── Welcome Message ────────────────────────────────────────────────────
+    # Welcome Message
 
     def _welcome(self) -> None:
         """Display and speak the initial greeting when the app launches."""
         message = (
-            "Hey! I'm FocusBot 🤖  Your AI desk assistant.\n\n"
-            "I can help with pretty much anything — questions, tasks,\n"
+            "Hey! I am Alfred, your AI desk assistant.\n\n"
+            "I can help with pretty much anything - questions, tasks,\n"
             "writing, ideas, or just a chat.\n\n"
-            "Need ADHD focus support? Hit the 🧠 Focus Mode button\n"
+            "Need ADHD focus support? Hit the Focus Mode button\n"
             "in the top right to switch modes anytime.\n\n"
-            "What can I help you with?"
+            "Click the mic button or type to get started!"
         )
-        self.display_message("FocusBot", message)
-        speak("Hey! I'm FocusBot. What can I help you with today?", self.tts_engine)
+        self.display_message("Alfred", message)
+        speak("Hey! I am Alfred. Click the mic or type to get started!", self.tts_engine)
+    
