@@ -102,7 +102,16 @@ class FocusBotApp:
             font=("Helvetica", 10),
             relief="flat", padx=12, pady=4, cursor="hand2",
         )
-        self.mode_btn.pack(side="right", padx=15)
+        self.mode_btn.pack(side="right", padx=5)
+
+        tk.Button(
+            frame,
+            text="Settings",
+            command=self._open_settings,
+            bg="#0f3460", fg="#888888",
+            font=("Helvetica", 10),
+            relief="flat", padx=12, pady=4, cursor="hand2",
+        ).pack(side="right", padx=5)
 
     def _build_quick_buttons(self) -> None:
         frame = tk.Frame(self.root, bg="#1a1a2e", pady=8)
@@ -377,6 +386,88 @@ class FocusBotApp:
         self.focus_active = False
         self.update_status("Ready")
         self.display_message("Alfred", "Timer stopped. That is okay, every minute counts!")
+
+    # Settings Panel
+
+    def _open_settings(self) -> None:
+        """Open the settings window."""
+        win = tk.Toplevel(self.root)
+        win.title("Settings")
+        win.geometry("400x420")
+        win.configure(bg="#1a1a2e")
+        win.resizable(False, False)
+
+        tk.Label(
+            win, text="Settings",
+            font=("Helvetica", 16, "bold"),
+            bg="#1a1a2e", fg="#00d4ff",
+        ).pack(pady=(20, 15))
+
+        # Name field
+        tk.Label(win, text="Your Name", bg="#1a1a2e", fg="#888888", font=("Helvetica", 11)).pack(anchor="w", padx=30)
+        name_var = tk.StringVar(value=self.memory.get("name") or "")
+        name_entry = tk.Entry(win, textvariable=name_var, bg="#0d0d1a", fg="white", font=("Helvetica", 12), relief="flat", insertbackground="white")
+        name_entry.pack(fill="x", padx=30, ipady=8, pady=(4, 14))
+
+        # Focus timer length
+        tk.Label(win, text="Focus Timer (minutes)", bg="#1a1a2e", fg="#888888", font=("Helvetica", 11)).pack(anchor="w", padx=30)
+        timer_var = tk.IntVar(value=self.memory.get("preferences", {}).get("focus_minutes", 25))
+        timer_spin = tk.Spinbox(win, from_=5, to=90, increment=5, textvariable=timer_var, bg="#0d0d1a", fg="white", font=("Helvetica", 12), relief="flat", buttonbackground="#0f3460", width=5)
+        timer_spin.pack(anchor="w", padx=30, ipady=6, pady=(4, 14))
+
+        # Voice toggle
+        tk.Label(win, text="Voice Output", bg="#1a1a2e", fg="#888888", font=("Helvetica", 11)).pack(anchor="w", padx=30)
+        voice_var = tk.BooleanVar(value=self.memory.get("preferences", {}).get("voice_enabled", True))
+        tk.Checkbutton(
+            win, text="Enabled", variable=voice_var,
+            bg="#1a1a2e", fg="white", selectcolor="#0f3460",
+            font=("Helvetica", 11), activebackground="#1a1a2e",
+        ).pack(anchor="w", padx=30, pady=(4, 14))
+
+        # Memory summary
+        notes = self.memory.get("notes", [])
+        tasks = self.memory.get("tasks", [])
+        summary = f"{len(notes)} note(s), {len(tasks)} task(s) stored"
+        tk.Label(win, text=f"Memory: {summary}", bg="#1a1a2e", fg="#555555", font=("Helvetica", 10)).pack(anchor="w", padx=30)
+
+        # Clear memory button
+        def _clear_memory() -> None:
+            from focusbot.memory import clear_memory
+            clear_memory(self.memory)
+            self.display_message("System", "Memory cleared.")
+            win.destroy()
+
+        tk.Button(
+            win, text="Clear All Memory",
+            command=_clear_memory,
+            bg="#3a0a0a", fg="#ff6b6b",
+            font=("Helvetica", 10),
+            relief="flat", padx=10, pady=4, cursor="hand2",
+        ).pack(anchor="w", padx=30, pady=(4, 20))
+
+        # Save button
+        def _save() -> None:
+            name = name_var.get().strip()
+            if name:
+                update_name(self.memory, name)
+
+            if "preferences" not in self.memory:
+                self.memory["preferences"] = {}
+            self.memory["preferences"]["focus_minutes"] = timer_var.get()
+            self.memory["preferences"]["voice_enabled"] = voice_var.get()
+
+            from focusbot.memory import save_memory
+            save_memory(self.memory)
+            self.display_message("System", "Settings saved.")
+            win.destroy()
+
+        tk.Button(
+            win, text="Save",
+            command=_save,
+            bg="#e94560", fg="white",
+            font=("Helvetica", 12, "bold"),
+            relief="flat", padx=20, pady=8, cursor="hand2",
+        ).pack(pady=10)
 
     # Welcome Message
 
