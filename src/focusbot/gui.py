@@ -59,12 +59,12 @@ class FocusBotApp:
 
         # External dependencies
         self.tts_engine: pyttsx3.Engine | None = init_tts()
-        self.recognizer = init_listener()
+        self.recognizer, self.active_flag = init_listener()
         self.client = create_client()
 
         self._build_ui()
         self._welcome()
-        start_wake_word(self._on_wake_word)
+        start_wake_word(self._on_wake_word, self.active_flag)
 
     # UI Construction
 
@@ -240,6 +240,7 @@ class FocusBotApp:
 
         start_listening(
             recognizer=self.recognizer,
+            active_flag=self.active_flag,
             on_listening=self._on_listening,
             on_result=self._on_voice_result,
             on_done=self._on_listening_done,
