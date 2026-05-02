@@ -23,6 +23,7 @@ from focusbot.assistant import (
 )
 from focusbot.config import FOCUS_MINUTES
 from focusbot.listener import init_listener, start_listening
+from focusbot.wakeword import start_wake_word
 from focusbot.reminders import (
     detect_intent,
     parse_reminder,
@@ -63,6 +64,7 @@ class FocusBotApp:
 
         self._build_ui()
         self._welcome()
+        start_wake_word(self._on_wake_word)
 
     # UI Construction
 
@@ -217,6 +219,18 @@ class FocusBotApp:
         """
         self.root.after(0, lambda: self.status_var.set(text))
 
+    # Wake Word
+
+    def _on_wake_word(self) -> None:
+        """
+        Called when 'hey alfred' is detected.
+        Automatically triggers the mic as if the user clicked the button.
+        """
+        if self.is_listening:
+            return
+        self.display_message("System", "Wake word detected - listening...")
+        self._on_mic()
+
     # Voice Input
 
     def _on_mic(self) -> None:
@@ -364,4 +378,4 @@ class FocusBotApp:
         )
         self.display_message("Alfred", message)
         speak("Hey! I am Alfred. Click the mic or type to get started!", self.tts_engine)
-    
+        
