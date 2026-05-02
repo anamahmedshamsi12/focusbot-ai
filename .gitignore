@@ -32,3 +32,4 @@ Thumbs.db
 
 # Secrets — NEVER commit your API key
 src/focusbot/config.py
+src/focusbot/config.py

@@ -23,8 +23,7 @@ if TYPE_CHECKING:
     from focusbot.gui import FocusBotApp
 
 
-# ── Intent Detection ───────────────────────────────────────────────────────
-
+# Intent Detection 
 def detect_intent(text: str) -> str:
     """
     Classify the user's message into one of five intent categories
@@ -60,7 +59,7 @@ def detect_intent(text: str) -> str:
     return "chat"
 
 
-# ── Reminder Parser ────────────────────────────────────────────────────────
+# Reminder Parser 
 
 def parse_reminder(text: str) -> int | None:
     """
@@ -88,7 +87,7 @@ def parse_reminder(text: str) -> int | None:
     return None
 
 
-# ── Reminder Scheduler ─────────────────────────────────────────────────────
+# Reminder Scheduler 
 
 def set_reminder(minutes: int, reminder_text: str, app: "FocusBotApp") -> None:
     """
@@ -110,7 +109,7 @@ def set_reminder(minutes: int, reminder_text: str, app: "FocusBotApp") -> None:
     threading.Thread(target=_wait_and_remind, daemon=True).start()
 
 
-# ── Focus Timer ────────────────────────────────────────────────────────────
+# Focus Timer 
 
 def start_focus_timer(minutes: int, app: "FocusBotApp") -> None:
     """
