@@ -10,6 +10,7 @@ and the function that sends messages to the Claude API.
 import anthropic
 
 from focusbot.config import ANTHROPIC_API_KEY
+from focusbot.memory import get_memory_summary
 
 
 GENERAL_PROMPT: str = """
@@ -68,22 +69,31 @@ def ask_alfred(
     conversation_history: list[dict],
     client: anthropic.Anthropic,
     system_prompt: str,
+    memory: dict | None = None,
 ) -> str:
     """
     Send a user message to the Claude API and return Alfred's reply.
 
-    Appends both the user message and the assistant reply to
-    conversation_history so context is preserved across turns.
+    Injects a memory summary into the system prompt so Alfred has
+    context about the user across sessions.
 
     Args:
-        user_message: The raw text typed by the user.
+        user_message: The raw text typed or spoken by the user.
         conversation_history: Running list of role/content dicts.
         client: Initialized Anthropic API client.
         system_prompt: Active personality prompt (General or Focus Mode).
+        memory: Optional memory dictionary to inject as context.
 
     Returns:
         Alfred's reply as a plain string.
     """
+    # Inject memory summary into system prompt if available
+    active_prompt = system_prompt
+    if memory:
+        summary = get_memory_summary(memory)
+        if summary:
+            active_prompt = f"{system_prompt}\n\nWhat you remember about this user:\n{summary}"
+
     conversation_history.append({
         "role": "user",
         "content": user_message,
@@ -93,7 +103,7 @@ def ask_alfred(
         response = client.messages.create(
             model="claude-opus-4-5",
             max_tokens=300,
-            system=system_prompt,
+            system=active_prompt,
             messages=conversation_history,
         )
         reply = response.content[0].text

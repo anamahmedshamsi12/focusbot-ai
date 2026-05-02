@@ -23,6 +23,7 @@ from focusbot.assistant import (
 )
 from focusbot.config import FOCUS_MINUTES
 from focusbot.listener import init_listener, start_listening
+from focusbot.memory import add_note, add_task, load_memory, update_name
 from focusbot.wakeword import start_wake_word
 from focusbot.reminders import (
     detect_intent,
@@ -56,6 +57,7 @@ class FocusBotApp:
         self.focus_active: bool = False
         self.focus_mode: bool   = False
         self.is_listening: bool = False
+        self.memory: dict       = load_memory()
 
         # External dependencies
         self.tts_engine: pyttsx3.Engine | None = init_tts()
@@ -290,6 +292,17 @@ class FocusBotApp:
         self.update_status("Alfred is thinking...")
         intent = detect_intent(text)
 
+        # Check for memory commands
+        low = text.lower()
+        if "my name is" in low:
+            name = text.lower().split("my name is")[-1].strip().split()[0]
+            update_name(self.memory, name)
+        elif "remember that" in low:
+            note = text.lower().split("remember that")[-1].strip()
+            add_note(self.memory, note)
+        elif any(w in low for w in ["i need to", "i have to", "i should"]):
+            add_task(self.memory, text.strip())
+
         if intent == "stop":
             self.focus_active = False
             self.display_message("Alfred", "Focus session stopped. Good effort!")
@@ -297,14 +310,14 @@ class FocusBotApp:
             self.update_status("Ready")
 
         elif intent == "focus":
-            reply = ask_alfred(text, self.conversation_history, self.client, self._active_prompt())
+            reply = ask_alfred(text, self.conversation_history, self.client, self._active_prompt(), self.memory)
             self.display_message("Alfred", reply)
             speak(reply, self.tts_engine)
             start_focus_timer(FOCUS_MINUTES, self)
 
         elif intent == "reminder":
             minutes = parse_reminder(text)
-            reply = ask_alfred(text, self.conversation_history, self.client, self._active_prompt())
+            reply = ask_alfred(text, self.conversation_history, self.client, self._active_prompt(), self.memory)
             self.display_message("Alfred", reply)
             speak(reply, self.tts_engine)
             if minutes:
@@ -315,7 +328,7 @@ class FocusBotApp:
             self.update_status("Ready")
 
         else:
-            reply = ask_alfred(text, self.conversation_history, self.client, self._active_prompt())
+            reply = ask_alfred(text, self.conversation_history, self.client, self._active_prompt(), self.memory)
             self.display_message("Alfred", reply)
             speak(reply, self.tts_engine)
             self.update_status("Ready")
@@ -369,8 +382,10 @@ class FocusBotApp:
 
     def _welcome(self) -> None:
         """Display and speak the initial greeting when the app launches."""
+        name = self.memory.get("name")
+        greeting = f"Hey {name}!" if name else "Hey!"
         message = (
-            "Hey! I am Alfred, your AI desk assistant.\n\n"
+            f"{greeting} I am Alfred, your AI desk assistant.\n\n"
             "I can help with pretty much anything - questions, tasks,\n"
             "writing, ideas, or just a chat.\n\n"
             "Need ADHD focus support? Hit the Focus Mode button\n"
@@ -378,5 +393,5 @@ class FocusBotApp:
             "Click the mic button or type to get started!"
         )
         self.display_message("Alfred", message)
-        speak("Hey! I am Alfred. Click the mic or type to get started!", self.tts_engine)
+        speak(f"{greeting} I am Alfred. Click the mic or type to get started!", self.tts_engine)
         
