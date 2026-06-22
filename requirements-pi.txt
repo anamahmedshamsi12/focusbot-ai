@@ -1,0 +1,14 @@
+# Raspberry Pi hardware dependencies for Alfred's eyes and arm.
+#
+# These only install successfully on Pi hardware (RPi.GPIO needs the
+# real GPIO kernel module; adafruit-blinka/board need an actual board
+# to detect). Do NOT install this file on a Mac/PC dev machine — the
+# OLED and servo modules already fall back to a Tkinter/console
+# simulator automatically when these aren't present.
+#
+#   pip install -r requirements.txt -r requirements-pi.txt
+
+RPi.GPIO>=0.7.1
+adafruit-circuitpython-ssd1306>=2.12.0
+adafruit-blinka>=8.0.0
+Pillow>=10.0.0

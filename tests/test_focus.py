@@ -1,15 +1,14 @@
 """
-test_reminders.py
------------------
-Unit tests for focusbot.reminders.
+test_focus.py
+--------------
+Unit tests for alfred.core.focus.
 
 Tests cover the two pure functions that have no external dependencies:
   - parse_reminder : extracts minutes from natural language strings
   - detect_intent  : classifies user messages into intent categories
 """
 
-import pytest
-from focusbot.reminders import detect_intent, parse_reminder
+from alfred.core.focus import detect_intent, parse_reminder
 
 
 # ── parse_reminder ─────────────────────────────────────────────────────────

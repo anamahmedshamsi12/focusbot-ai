@@ -1,0 +1,12 @@
+# Core runtime dependencies for Alfred — install on any machine
+# (Mac, Linux, or Raspberry Pi) with:
+#   pip install -r requirements.txt
+#
+# For Raspberry Pi hardware (OLED + servo) support, also install:
+#   pip install -r requirements-pi.txt
+
+anthropic>=0.25.0
+pyttsx3>=2.90
+edge-tts>=6.1.0
+SpeechRecognition>=3.10.0
+PyAudio>=0.2.13
