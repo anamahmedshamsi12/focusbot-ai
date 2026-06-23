@@ -16,6 +16,7 @@ or:
     python alfred/focusbot.py
 """
 
+import random
 import threading
 import tkinter as tk
 from tkinter import scrolledtext
@@ -43,6 +44,16 @@ from alfred.core.focus import (
 )
 from alfred.core.personality import Personality
 from alfred.core.voice import init_listener, init_tts, speak, start_listening, start_wake_word
+
+# Spoken when the wake word is heard but no command follows it within
+# the listening window — keeps Alfred from going silent on a bare "hey
+# alfred", the same way a real assistant would acknowledge you.
+NO_COMMAND_GREETINGS: list[str] = [
+    "Hey, how's it going?",
+    "Hey there! What's up?",
+    "Yeah? I'm listening.",
+    "Hi! Need something?",
+]
 
 
 class FocusBotApp:
@@ -259,17 +270,27 @@ class FocusBotApp:
 
     # ── Wake Word ────────────────────────────────────────────────────────
 
-    def _on_wake_word(self) -> None:
+    def _on_wake_word(self, command: str = "") -> None:
         """
         Called when 'hey alfred' is detected.
-        Reacts with the personality system and opens the mic, exactly as
-        if the user had clicked the mic button.
+
+        Args:
+            command: Anything the user said in the same breath right
+                after "hey alfred" (e.g. "hey alfred what's the
+                weather" -> "what's the weather"). When non-empty, it's
+                processed immediately instead of opening the mic again.
         """
         if self.is_listening:
             return
         self.personality.on_wake_word()
-        self.display_message("System", "Wake word detected - listening...")
-        self._on_mic()
+
+        if command:
+            self.display_message("System", "Wake word detected - command included")
+            self.display_message("You", command)
+            threading.Thread(target=self._process_message, args=(command,), daemon=True).start()
+        else:
+            self.display_message("System", "Wake word detected - listening...")
+            self._on_mic()
 
     # ── Voice Input ──────────────────────────────────────────────────────
 
@@ -284,7 +305,22 @@ class FocusBotApp:
             on_listening=self._on_listening,
             on_result=self._on_voice_result,
             on_done=self._on_listening_done,
+            on_level=self.personality.on_audio_level,
+            on_nothing_heard=self._on_nothing_heard,
         )
+
+    def _on_nothing_heard(self) -> None:
+        """
+        Called when a listening session ends with no speech transcribed.
+
+        Respond with a casual greeting rather than going quiet — covers
+        both "hey alfred" with nothing after, and the manual mic button
+        being clicked and then not spoken into.
+        """
+        reply = random.choice(NO_COMMAND_GREETINGS)
+        self.display_message("Alfred", reply)
+        self.personality.on_speaking()
+        speak(reply, self.tts_engine)
 
     def _on_listening(self) -> None:
         """Called when the mic opens. Updates UI and eyes to show the listening state."""
